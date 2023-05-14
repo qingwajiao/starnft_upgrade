@@ -3,17 +3,8 @@
 const { ethers } = require("hardhat");
 const { upgrades } = require("hardhat");
 
-const fs = require('fs');
 
-function appendToFile(filePath, content) {
-  fs.appendFile(filePath, content, function (err) {
-    if (err) {
-      console.error('文件追加失败:', err);
-    } else {
-      console.log('内容已成功追加到文件:', filePath);
-    }
-  });
-}
+
 
 // 示例用法
 const filePath = '../ContractAddress.txt';
