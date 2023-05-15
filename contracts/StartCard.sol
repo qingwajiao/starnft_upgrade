@@ -1,15 +1,17 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.4;
+pragma solidity ^0.8.10;
 
 import "@openzeppelin/contracts-upgradeable/token/ERC721/ERC721Upgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/token/ERC721/extensions/ERC721URIStorageUpgradeable.sol";
+// import "@openzeppelin/contracts-upgradeable/token/ERC721/extensions/ERC721URIStorageUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/utils/StringsUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/utils/cryptography/ECDSAUpgradeable.sol"; 
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+
 
 interface ISTAKING{
-    function stake(address to, uint256 tokenId)external;
+    function cStake(address to, uint256 tokenId)external;
     function update(uint256 tokenId,uint256 computingPower)external;
 }
 
@@ -18,7 +20,7 @@ interface IMeteorite{
     function burn(uint256 tokenId)external;
 }
 
-contract StartCard is Initializable, ERC721Upgradeable, ERC721URIStorageUpgradeable, OwnableUpgradeable {
+contract StartCard is Initializable, ERC721Upgradeable, OwnableUpgradeable,UUPSUpgradeable {
     using StringsUpgradeable for uint256;
     using ECDSAUpgradeable for bytes32;
 
@@ -48,12 +50,19 @@ contract StartCard is Initializable, ERC721Upgradeable, ERC721URIStorageUpgradea
 
     function initialize() initializer public {
         __ERC721_init("STAR CARD", "STAR");
-        __ERC721URIStorage_init();
+        // __ERC721URIStorage_init();
         __Ownable_init();
+        __UUPSUpgradeable_init();
     }
 
+    function _authorizeUpgrade(address newImplementation)
+        internal
+        onlyOwner
+        override
+    {}
+
     /**
-     * @dev Throws if called by any account other than the owner.
+     * @dev Throws if called by any account other than the Operator.
      */
     modifier onlyOperator() {
         _checkOperator();
@@ -64,7 +73,7 @@ contract StartCard is Initializable, ERC721Upgradeable, ERC721URIStorageUpgradea
 
     function _burn(uint256 tokenId)
         internal
-        override(ERC721Upgradeable, ERC721URIStorageUpgradeable)
+        override(ERC721Upgradeable)
     {
         super._burn(tokenId);
     }
@@ -72,7 +81,7 @@ contract StartCard is Initializable, ERC721Upgradeable, ERC721URIStorageUpgradea
     function tokenURI(uint256 tokenId)
         public
         view
-        override(ERC721Upgradeable, ERC721URIStorageUpgradeable)
+        override(ERC721Upgradeable)
         returns (string memory)
     {
         return super.tokenURI(tokenId);
@@ -84,7 +93,7 @@ contract StartCard is Initializable, ERC721Upgradeable, ERC721URIStorageUpgradea
 
         starCards[id] = StarCard(id, level, starRating, computingPower, quality, color);
 
-        ISTAKING(_staking).stake(to,id);
+        ISTAKING(_staking).cStake(to,id);
 
         return id;
     }

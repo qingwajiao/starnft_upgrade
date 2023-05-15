@@ -1,6 +1,6 @@
 
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.9;
+pragma solidity ^0.8.10;
 
 
 // import "@openzeppelin/contracts-upgradeable/token/ERC721/IERC721Upgradeable.sol"
@@ -12,6 +12,7 @@ import "@openzeppelin/contracts-upgradeable/token/ERC721/IERC721ReceiverUpgradea
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/utils/AddressUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
 
 
@@ -40,12 +41,13 @@ interface IStartCard is IERC721Upgradeable {
     function getNFTpower(uint256 tokenId) external returns (uint256);
 }
 
-contract Staking is Initializable, IERC721ReceiverUpgradeable, OwnableUpgradeable {
-using SafeERC20 for IERC20Upgradeable;
+contract Staking is Initializable, IERC721ReceiverUpgradeable, OwnableUpgradeable ,UUPSUpgradeable{
+    using SafeERC20 for IERC20Upgradeable;
 
     struct UserInfo{
         uint256 power;
         uint256 rewardDebt; 
+        // uint256[] starCards; 
     }
     
     uint256 public perBlock;
@@ -53,6 +55,7 @@ using SafeERC20 for IERC20Upgradeable;
 
     mapping(address=>UserInfo) public userInfo;
     mapping(uint256=>address) public ownerOf;
+    mapping(address => bool) public operators;
 
     struct PoolInfo {
         uint256 totalPower;
@@ -61,69 +64,113 @@ using SafeERC20 for IERC20Upgradeable;
     }
 
     PoolInfo public pool;
-    address private  _StartNft;
+    address public  starCard;
+
+    event SetOperator(address indexed owner, address indexed operator,bool indexed state);
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
         _disableInitializers();
     }
 
-    function initialize(address startNft_) initializer public {
+    function initialize() initializer public {
         __Ownable_init();
-        setStartNft(startNft_);
+        __UUPSUpgradeable_init();
+        setStarCard(0x9D7f74d0C41E726EC95884E0e97Fa6129e3b5E99);
         
     }
 
-    function stake(address to, uint256 tokenId)external {
-        uint256 power =  IStartCard(_StartNft).getNFTpower(tokenId);
+    function _authorizeUpgrade(address newImplementation)
+        internal
+        onlyOwner
+        override
+    {}
+
+    /**
+     * @dev Throws if called by any account other than the Operator.
+     */
+    modifier onlyOperator() {
+        _checkOperator();
+        _;
+    }
+
+    function cStake(address to, uint256 tokenId)public onlyOperator {
+        uint256 power =  IStartCard(starCard).getNFTpower(tokenId);
 
         updatePool();
         ownerOf[tokenId] = to;
         UserInfo storage user =  userInfo[to];
-        // 结算奖励
-        uint256 pending = user.power * pool.accPerShare  / 1e12 / user.rewardDebt;
-        if(pending > 0){
+
+        if(user.power > 0){
+            // 结算奖励
+            uint256 pending = user.power * pool.accPerShare  / 1e12 - user.rewardDebt;
             rewardToken.safeTransfer(msg.sender, pending);
         }
+ 
         user.power += power;
+        user.rewardDebt = user.power * pool.accPerShare  / 1e12 ;
         pool.totalPower += power;
         
     }
 
-    function withdraw(uint256 tokenId)external {
-        require(ownerOf[tokenId] == msg.sender,"");
-        uint256 power =  IStartCard(_StartNft).getNFTpower(tokenId);
+    function dStake( uint256 tokenId)public {
+        address owner = msg.sender;
+        require(IStartCard(starCard).ownerOf(tokenId) == owner,"Staking: Not the owner");
+        uint256 power =  IStartCard(starCard).getNFTpower(tokenId);
+
+        updatePool();
+        ownerOf[tokenId] = owner;
+        UserInfo storage user =  userInfo[owner];
+
+        if(user.power > 0){
+            // 结算奖励
+            uint256 pending = user.power * pool.accPerShare  / 1e12 - user.rewardDebt;
+            rewardToken.safeTransfer(owner, pending);
+        }
+ 
+        user.power += power;
+        user.rewardDebt = user.power * pool.accPerShare  / 1e12 ;
+        pool.totalPower += power;
+        
+    }
+
+    function withdraw(address to, uint256 tokenId)external {
+        require(ownerOf[tokenId] == msg.sender,"Staking: Not the owner");
+        uint256 power =  IStartCard(starCard).getNFTpower(tokenId);
         UserInfo storage user =  userInfo[msg.sender];
 
         updatePool();
 
-        // 结算奖励
-        uint256 pending = user.power * pool.accPerShare  / 1e12 / user.rewardDebt;
-        if(pending > 0){
-            rewardToken.safeTransfer(msg.sender, pending);
+        if(user.power > 0){
+            // 结算奖励
+            uint256 pending = user.power * pool.accPerShare  / 1e12 - user.rewardDebt;
+            rewardToken.safeTransfer(to, pending);
         }
 
         user.power -= power;
+        user.rewardDebt = user.power * pool.accPerShare  / 1e12 ;
         pool.totalPower -= power;
         ownerOf[tokenId] = address(0);
        
         // 转nft给用户
-        IStartCard(_StartNft).safeTransferFrom(address(this),msg.sender,tokenId);
+        IStartCard(starCard).safeTransferFrom(address(this),to,tokenId);
     }
 
 
-    function update(uint256 tokenId,uint256 power_) public{
+    function update(uint256 tokenId,uint256 power_) public onlyOperator {
 
         address owner = ownerOf[tokenId];
         UserInfo storage user =  userInfo[owner];
 
         updatePool();
         // 结算奖励
-        uint256 pending = user.power * pool.accPerShare  / 1e12 / user.rewardDebt;
-        if(pending > 0){
+        if(user.power > 0){
+            // 结算奖励
+            uint256 pending = user.power * pool.accPerShare  / 1e12 - user.rewardDebt;
             rewardToken.safeTransfer(msg.sender, pending);
         }
         user.power += power_;
+        user.rewardDebt = user.power * pool.accPerShare  / 1e12 ;
         pool.totalPower += power_;
     }
 
@@ -147,30 +194,20 @@ using SafeERC20 for IERC20Upgradeable;
     }
 
 
-    //     // Withdraw LP tokens from MasterChef.
-    // function withdraw(uint256 _pid, uint256 _amount) public {
-    //     PoolInfo storage pool = poolInfo[_pid];
-    //     UserInfo storage user = userInfo[_pid][msg.sender];
-    //     require(user.amount >= _amount, "withdraw: not good");
-    //     updatePool(_pid);
-    //     uint256 pending = user.amount.mul(pool.accSushiPerShare).div(1e12).sub(user.rewardDebt);
-    //     safeSushiTransfer(msg.sender, pending);
-    //     user.amount = user.amount.sub(_amount);
-    //     user.rewardDebt = user.amount.mul(pool.accSushiPerShare).div(1e12);
-    //     pool.lpToken.safeTransfer(address(msg.sender), _amount);
-    //     emit Withdraw(msg.sender, _pid, _amount);
-    // }
-
-
-    function setStartNft(address startNft_) public onlyOwner {
-        _StartNft = startNft_;
+    function setStarCard(address starCard_) public onlyOwner {
+        require(address(starCard_) != address(0),"Staking: Zero address error");
+        starCard = starCard_;
     }
 
-    function StartNft()external view returns(address){
-        return address(_StartNft) ;
+    function setRewardToken(IERC20Upgradeable rewardToken_ )external onlyOwner{
+        require(address(rewardToken_) != address(0),"Staking: Zero address error");
+         rewardToken = rewardToken_;
+    }
+    function setOperator(address operator,bool state)external onlyOwner {
+        operators[operator] = state;
+        emit SetOperator(msg.sender,operator,state);
     }
 
-     
     function onERC721Received(address, address, uint256, bytes memory) public virtual override returns (bytes4) {
         return this.onERC721Received.selector;
     }
@@ -182,7 +219,7 @@ using SafeERC20 for IERC20Upgradeable;
     }
 
         // View function to see pending SUSHIs on frontend.
-    function pendingSushi( address _user) external view returns (uint256) {
+    function pendingReward( address _user) external view returns (uint256) {
         // PoolInfo storage pool = PoolInfo[_pid];
         UserInfo storage user = userInfo[_user];
         uint256 accPerShare = pool.accPerShare;
@@ -193,6 +230,10 @@ using SafeERC20 for IERC20Upgradeable;
             accPerShare = accPerShare + (reward * 1e12  / pool.totalPower );
         }
         return user.power * accPerShare / 1e12 - user.rewardDebt;
+    }
+
+    function _checkOperator() internal view virtual {
+        require(operators[_msgSender()], "Ownable: caller is not the owner");
     }
 
    

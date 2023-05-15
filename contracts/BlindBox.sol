@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.10;
 
 import "@openzeppelin/contracts-upgradeable/token/ERC1155/ERC1155Upgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
@@ -30,7 +30,7 @@ library SafeERC20 {
 }
 
 interface IStartCard {
-    function mintNFT(address to,uint64 id, uint64 level, uint64 starRating, uint64 computingPower, string memory quality, string memory color) external ;
+    function mintStarCard(address to,uint64 id, uint64 level, uint64 starRating, uint64 computingPower, string memory quality, string memory color) external ;
 }
 
 interface IMeteorite{
@@ -38,11 +38,12 @@ interface IMeteorite{
 }
 
 contract BlindBox is Initializable, ERC1155Upgradeable, OwnableUpgradeable,UUPSUpgradeable{
+
     using ECDSAUpgradeable for bytes32;
     using StringsUpgradeable for uint256;
     using SafeERC20 for IERC20Upgradeable;
 
-    address private _backend;
+    address public  _backend;
     address private  _starCard;
     address private  _meteorite;
     mapping(IERC20Upgradeable => bool) public currencys;
@@ -57,12 +58,11 @@ contract BlindBox is Initializable, ERC1155Upgradeable, OwnableUpgradeable,UUPSU
     }
 
     struct MeteoriteParam {
-        uint64 id;
+        uint256 id;
         string quality;
     }
 
     mapping(uint256 => bool) recordMap;
-
     modifier once(uint256 nonce) {
         require(!recordMap[nonce], "already transferred");
         _;
@@ -84,7 +84,9 @@ contract BlindBox is Initializable, ERC1155Upgradeable, OwnableUpgradeable,UUPSU
         __ERC1155_init("");
         __Ownable_init();
         __UUPSUpgradeable_init();
-        _backend = 0xA86d6876E8c50D66A00B1A5E81B9D5a6fF0aA204;
+        setBackend(0x51b5234307b6eB330E2b635f878db6514ea445B4);
+        setCurrency(IERC20Upgradeable(0x55d398326f99059fF775485246999027B3197955), true);
+
     }
 
     function _authorizeUpgrade(address newImplementation)
@@ -98,13 +100,13 @@ contract BlindBox is Initializable, ERC1155Upgradeable, OwnableUpgradeable,UUPSU
         _setURI(uri_);
     }
 
-    function setCurrency(IERC20Upgradeable Currency_, bool state_) external onlyOwner {
+    function setCurrency(IERC20Upgradeable Currency_, bool state_) public  onlyOwner {
         currencys[Currency_] = state_;
 
         emit SetCurrency(msg.sender,address(Currency_) ,state_);
     }
 
-    function setBackend(address backend_) external onlyOwner {
+    function setBackend(address backend_) public onlyOwner {
         require(backend_ != address(0),"BlindBox: zero address error");
         _backend = backend_;
     }
@@ -152,7 +154,7 @@ contract BlindBox is Initializable, ERC1155Upgradeable, OwnableUpgradeable,UUPSU
 
         // mint startNFT
         for(uint256 i = 0;i < amount; i++){
-            IStartCard(_starCard).mintNFT(msg.sender,args[i].id, args[i].level, args[i].starRating, args[i].computingPower, args[i].quality, args[i].color);
+            IStartCard(_starCard).mintStarCard(msg.sender,args[i].id, args[i].level, args[i].starRating, args[i].computingPower, args[i].quality, args[i].color);
             
         }
         _burn(msg.sender, tokneId, amount);
@@ -177,14 +179,13 @@ contract BlindBox is Initializable, ERC1155Upgradeable, OwnableUpgradeable,UUPSU
 
 
     function withdraw(IERC20Upgradeable currency ) external onlyOwner {
-        // require(currency.balanceOf(address(this)) > 0, "BlindBox: Balance is zero");
         uint256 amount = currency.balanceOf(address(this));
         currency.safeTransfer(msg.sender, amount);
         
     }
 
     function checkSigner(bytes memory hash, bytes memory signature)private view{
-        require( keccak256(hash).toEthSignedMessageHash().recover(signature) == _backend,"wrong signer");
+        require( keccak256(hash).toEthSignedMessageHash().recover(signature) == _backend,"BlindBox: wrong signer");
     }
 
     function uri(uint256 tokenId) public view virtual override returns (string memory) {
