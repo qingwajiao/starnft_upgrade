@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
-pragma experimental ABIEncoderV2;
 
 import "@openzeppelin/contracts-upgradeable/token/ERC1155/ERC1155Upgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
@@ -10,9 +9,12 @@ import "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/utils/StringsUpgradeable.sol";
 
 
-interface IstartNFT {
+interface IStartCard {
     function mintNFT(address to,uint64 id, uint64 level, uint64 starRating, uint64 computingPower, string memory quality, string memory color) external ;
-    function getNFT(uint256 tokenId) external;
+}
+
+interface IMeteorite{
+    function mintMeteorite(address to ,uint256 tokenId, string memory quality)external;
 }
 
 contract BlindBox is Initializable, ERC1155Upgradeable, OwnableUpgradeable{
@@ -20,10 +22,11 @@ contract BlindBox is Initializable, ERC1155Upgradeable, OwnableUpgradeable{
     using StringsUpgradeable for uint256;
 
     address private _backend;
-    address private _USDT;
-    address private  _StartNft;
+    address private _usdt;
+    address private  _starCard;
+    address private  _meteorite;
 
-    struct Attribute {
+    struct StarCardParam {
         uint64 id;
         uint64 level;
         uint64 starRating;
@@ -32,11 +35,11 @@ contract BlindBox is Initializable, ERC1155Upgradeable, OwnableUpgradeable{
         string color;
     }
 
-    struct BlindBoxAmount{
-        uint256 total;
-        uint256 unopenedAmount;
+    struct MeteoriteParam {
+        uint64 id;
+        string quality;
     }
-    mapping(uint256 =>BlindBoxAmount ) public blindBoxAmounts;
+
     mapping(uint256 => bool) recordMap;
 
     modifier once(uint256 nonce) {
@@ -45,9 +48,10 @@ contract BlindBox is Initializable, ERC1155Upgradeable, OwnableUpgradeable{
         recordMap[nonce] = true;
     }
 
-    event CBuyBox(address indexed user, uint256 indexed tokenID, uint256 indexed amount);
-    event DBuyBox(address indexed user, uint256 indexed tokenID, uint256 indexed amount,uint256 price);
-    event OpenBox(address indexed user, uint256 indexed tokenID, uint256 indexed amount);
+    event SetStarCard(address indexed owner, address indexed starCard);
+    event SetMeteorite(address indexed owner, address indexed meteorite);
+    event SetUSDT(address indexed owner, address indexed usdt);
+    event SetBackend(address indexed owner, address indexed backend);
 
     function initialize(address backend_)initializer public {
         __ERC1155_init("");
@@ -61,67 +65,89 @@ contract BlindBox is Initializable, ERC1155Upgradeable, OwnableUpgradeable{
     }
 
     function setBackend(address backend_) external onlyOwner {
+        require(backend_ != address(0),"BlindBox: zero address error");
         _backend = backend_;
     }
 
-    function setStartNft(address startNft_) external onlyOwner {
-        _StartNft = startNft_;
+    function setStarCard(address starCard_) external onlyOwner {
+        require(starCard_ != address(0),"BlindBox: zero address error");
+        _starCard = starCard_;
+    }
+
+    function setMeteorite(address meteorite_)external onlyOwner {
+        require(meteorite_ != address(0),"BlindBox: zero address error");
+        _meteorite = meteorite_;
     }
 
     function setUSDT(address usdt_)external onlyOwner {
-        _USDT = usdt_;
+        require(usdt_ != address(0),"BlindBox: zero address error");
+        _usdt = usdt_;
     }
 
-    function StartNft()external view returns(address){
-        return address(_StartNft) ;
+    function meteorite()external view returns(address){
+        return  _meteorite;
+    }
+
+    function starCard()external view returns(address){
+        return _starCard;
     }
 
     function USDT()external view returns(address){
-        return _USDT;
+        return _usdt;
     }
-// Centralized purchasing
-    function cBuyBox(uint256 nftID, uint256 amount, uint256 nonce, bytes calldata signature) external once(nonce)  {
+    // Centralized purchase starcard
+    function cTreasureBox(uint256 nftID, uint256 amount, uint256 nonce, bytes calldata signature) external once(nonce)  {
         checkSigner(abi.encodePacked(nftID, amount, nonce), signature);
         require(amount > 0 ,"BlindBox: Invalid amount");
         _mint(msg.sender, nftID, amount, "");
-
-        emit CBuyBox(msg.sender,nftID,amount);
     }
-    // Decentralized purchasing
-    function dBuyBox(uint256 nftID, uint256 amount, uint256 price,uint256 nonce, bytes calldata signature) external once(nonce) {
+    // Decentralized purchase starcard
+    function dTreasureBox(uint256 nftID, uint256 amount, uint256 price,uint256 nonce, bytes calldata signature) external once(nonce) {
         checkSigner(abi.encodePacked(nftID, amount,price, nonce), signature);
         require(amount > 0 ,"BlindBox: Invalid amount");
-        require(IERC20Upgradeable(_USDT).balanceOf(msg.sender) >=  amount * price,"BlindBox: Insufficient amount");
+        require(price !=0 && IERC20Upgradeable(_usdt).balanceOf(msg.sender) >=  amount * price,"BlindBox: price error");
 
-        IERC20Upgradeable(_USDT).transferFrom(msg.sender,address(this) , amount * price);
+        IERC20Upgradeable(_usdt).transferFrom(msg.sender,address(this) , amount * price);
         _mint(msg.sender, nftID, amount, "");
-
-        emit DBuyBox(msg.sender,nftID,amount,price);
     }
 
-    function openBox(uint256 nftID,uint256 nonce,bytes calldata signature, Attribute[] memory args ) external once(nonce) {
-        checkSigner(abi.encodePacked(nftID, nonce), signature);
+    function openStarBox(uint256 tokneId,uint256 nonce,bytes calldata signature, StarCardParam[] memory args ) external once(nonce) {
+        require(tokneId == 1,"BlindBox: tokneId wrong");
+        checkSigner(abi.encodePacked(tokneId, nonce), signature);
         uint256 amount = args.length;
-        require(balanceOf(msg.sender, nftID) >= amount, "BlindBox: user has no such box");
+        require(balanceOf(msg.sender, tokneId) >= amount, "BlindBox: user has no such box");
 
         // mint startNFT
         for(uint256 i = 0;i < amount; i++){
-            IstartNFT(_StartNft).mintNFT(msg.sender,args[i].id, args[i].level, args[i].starRating, args[i].computingPower, args[i].quality, args[i].color);
+            IStartCard(_starCard).mintNFT(msg.sender,args[i].id, args[i].level, args[i].starRating, args[i].computingPower, args[i].quality, args[i].color);
             
         }
 
         // burn 1155BlindBox
-        _burn(msg.sender, nftID, amount);
+        _burn(msg.sender, tokneId, amount);
 
-        emit OpenBox(msg.sender,nftID,amount);
+    }
+
+    function openMeteoriteBox(uint256 tokneId,uint256 nonce,bytes calldata signature, MeteoriteParam[] memory args ) external once(nonce) {
+        require(tokneId == 2,"BlindBox: tokneId wrong");
+        checkSigner(abi.encodePacked(tokneId, nonce), signature);
+        uint256 amount = args.length;
+        require(balanceOf(msg.sender, tokneId) >= amount, "BlindBox: user has no such box");
+
+        // mint startNFT
+        for(uint256 i = 0;i < amount; i++){
+            IMeteorite(_meteorite).mintMeteorite(_msgSender(), args[i].id, args[i].quality);
+            
+        }
+        // burn 1155BlindBox
+        _burn(msg.sender, tokneId, amount);
 
     }
 
 
-
     function withdraw() external onlyOwner {
-        require(IERC20Upgradeable(_USDT).balanceOf(address(this)) > 0, "BlindBox: Balance is zero");
-        require(IERC20Upgradeable(_USDT).transfer(msg.sender, IERC20Upgradeable(_USDT).balanceOf(address(this))), "BlindBox: withdraw fail");
+        require(IERC20Upgradeable(_usdt).balanceOf(address(this)) > 0, "BlindBox: Balance is zero");
+        require(IERC20Upgradeable(_usdt).transfer(msg.sender, IERC20Upgradeable(_usdt).balanceOf(address(this))), "BlindBox: withdraw fail");
         
     }
 
@@ -133,10 +159,6 @@ contract BlindBox is Initializable, ERC1155Upgradeable, OwnableUpgradeable{
       string memory baseTokenURI =  super.uri(tokenId);
       return bytes(baseTokenURI).length > 0 ? string(abi.encodePacked(baseTokenURI, tokenId.toString())) : "";
     }
-
-
-
-
 
 
 }

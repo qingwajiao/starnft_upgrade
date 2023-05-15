@@ -25,4 +25,19 @@ StakingProxy 合約地址 0xfD2841aD29b4Ed84270346198B00CaA0c9ae433c
 Staking邏輯合約地址 getImplementationAddress 0x72b29142E11A31173Ffb825A95094fe8C81a9b41
 
 
+#----------
+
+正在發佈 BlindBox ...
+Proxy 合約地址 0xD6B0d32C013E5a8E8B85F680066E237fAf1CE699
+等待兩個網路確認 ... 
+管理合約地址 getAdminAddress 0x37e1529AF917bF87c46939B0E6a34F79BCEB7929
+邏輯合約地址 getImplementationAddress 0x6e7c28f30588Eda5c667a042aFd10Dd99144905d
+
+
+Meteorite
+Proxy 合約地址 0x349A5d5Ae61855070D99EFA9B579bF545dDB95B1
+等待兩個網路確認 ... 
+邏輯合約地址 getImplementationAddress 0x6c096ae13dD98E413b30f248f139718624034506
+
+
 
