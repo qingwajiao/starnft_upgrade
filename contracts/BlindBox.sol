@@ -7,7 +7,27 @@ import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/utils/cryptography/ECDSAUpgradeable.sol"; 
 import "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/utils/StringsUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/utils/AddressUpgradeable.sol";
 
+library SafeERC20 { 
+    using AddressUpgradeable for address;
+
+    function safeTransfer(IERC20Upgradeable token, address to, uint256 value) internal {
+        _callOptionalReturn(token, abi.encodeWithSelector(token.transfer.selector, to, value));
+    }
+
+    function safeTransferFrom(IERC20Upgradeable token, address from, address to, uint256 value) internal {
+        _callOptionalReturn(token, abi.encodeWithSelector(token.transferFrom.selector, from, to, value));
+    }
+    function _callOptionalReturn(IERC20Upgradeable token, bytes memory data) private {
+        bytes memory returndata = address(token).functionCall(data, "SafeERC20: low-level call failed");
+        if (returndata.length > 0) { // Return data is optional
+            // solhint-disable-next-line max-line-length
+            require(abi.decode(returndata, (bool)), "SafeERC20: ERC20 operation did not succeed");
+        }
+    }
+}
 
 interface IStartCard {
     function mintNFT(address to,uint64 id, uint64 level, uint64 starRating, uint64 computingPower, string memory quality, string memory color) external ;
@@ -17,14 +37,15 @@ interface IMeteorite{
     function mintMeteorite(address to ,uint256 tokenId, string memory quality)external;
 }
 
-contract BlindBox is Initializable, ERC1155Upgradeable, OwnableUpgradeable{
+contract BlindBox is Initializable, ERC1155Upgradeable, OwnableUpgradeable,UUPSUpgradeable{
     using ECDSAUpgradeable for bytes32;
     using StringsUpgradeable for uint256;
+    using SafeERC20 for IERC20Upgradeable;
 
     address private _backend;
-    address private _usdt;
     address private  _starCard;
     address private  _meteorite;
+    mapping(IERC20Upgradeable => bool) public currencys;
 
     struct StarCardParam {
         uint64 id;
@@ -52,16 +73,35 @@ contract BlindBox is Initializable, ERC1155Upgradeable, OwnableUpgradeable{
     event SetMeteorite(address indexed owner, address indexed meteorite);
     event SetUSDT(address indexed owner, address indexed usdt);
     event SetBackend(address indexed owner, address indexed backend);
+    event SetCurrency(address indexed owner, address indexed currency,bool indexed state);
 
-    function initialize(address backend_)initializer public {
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
+    function initialize()public initializer  {
         __ERC1155_init("");
         __Ownable_init();
-        _backend = backend_;
+        __UUPSUpgradeable_init();
+        _backend = 0xA86d6876E8c50D66A00B1A5E81B9D5a6fF0aA204;
     }
+
+    function _authorizeUpgrade(address newImplementation)
+        internal
+        onlyOwner
+        override
+    {}
 
 
     function setURI(string memory uri_) external onlyOwner {
         _setURI(uri_);
+    }
+
+    function setCurrency(IERC20Upgradeable Currency_, bool state_) external onlyOwner {
+        currencys[Currency_] = state_;
+
+        emit SetCurrency(msg.sender,address(Currency_) ,state_);
     }
 
     function setBackend(address backend_) external onlyOwner {
@@ -79,11 +119,6 @@ contract BlindBox is Initializable, ERC1155Upgradeable, OwnableUpgradeable{
         _meteorite = meteorite_;
     }
 
-    function setUSDT(address usdt_)external onlyOwner {
-        require(usdt_ != address(0),"BlindBox: zero address error");
-        _usdt = usdt_;
-    }
-
     function meteorite()external view returns(address){
         return  _meteorite;
     }
@@ -92,9 +127,6 @@ contract BlindBox is Initializable, ERC1155Upgradeable, OwnableUpgradeable{
         return _starCard;
     }
 
-    function USDT()external view returns(address){
-        return _usdt;
-    }
     // Centralized purchase starcard
     function cTreasureBox(uint256 nftID, uint256 amount, uint256 nonce, bytes calldata signature) external once(nonce)  {
         checkSigner(abi.encodePacked(nftID, amount, nonce), signature);
@@ -102,12 +134,13 @@ contract BlindBox is Initializable, ERC1155Upgradeable, OwnableUpgradeable{
         _mint(msg.sender, nftID, amount, "");
     }
     // Decentralized purchase starcard
-    function dTreasureBox(uint256 nftID, uint256 amount, uint256 price,uint256 nonce, bytes calldata signature) external once(nonce) {
-        checkSigner(abi.encodePacked(nftID, amount,price, nonce), signature);
+    function dTreasureBox(uint256 nftID, uint256 amount, uint256 price,IERC20Upgradeable currency, uint256 nonce, bytes calldata signature) external once(nonce) {
+        require(currencys[currency],"BlindBox: Illegal currency");
+        checkSigner(abi.encodePacked(nftID, amount,price,currency, nonce), signature);
         require(amount > 0 ,"BlindBox: Invalid amount");
-        require(price !=0 && IERC20Upgradeable(_usdt).balanceOf(msg.sender) >=  amount * price,"BlindBox: price error");
+        require(price !=0 && IERC20Upgradeable(currency).balanceOf(msg.sender) >=  amount * price,"BlindBox: price error");
 
-        IERC20Upgradeable(_usdt).transferFrom(msg.sender,address(this) , amount * price);
+        currency.safeTransferFrom(msg.sender,address(this) , amount * price);
         _mint(msg.sender, nftID, amount, "");
     }
 
@@ -122,8 +155,6 @@ contract BlindBox is Initializable, ERC1155Upgradeable, OwnableUpgradeable{
             IStartCard(_starCard).mintNFT(msg.sender,args[i].id, args[i].level, args[i].starRating, args[i].computingPower, args[i].quality, args[i].color);
             
         }
-
-        // burn 1155BlindBox
         _burn(msg.sender, tokneId, amount);
 
     }
@@ -145,9 +176,10 @@ contract BlindBox is Initializable, ERC1155Upgradeable, OwnableUpgradeable{
     }
 
 
-    function withdraw() external onlyOwner {
-        require(IERC20Upgradeable(_usdt).balanceOf(address(this)) > 0, "BlindBox: Balance is zero");
-        require(IERC20Upgradeable(_usdt).transfer(msg.sender, IERC20Upgradeable(_usdt).balanceOf(address(this))), "BlindBox: withdraw fail");
+    function withdraw(IERC20Upgradeable currency ) external onlyOwner {
+        // require(currency.balanceOf(address(this)) > 0, "BlindBox: Balance is zero");
+        uint256 amount = currency.balanceOf(address(this));
+        currency.safeTransfer(msg.sender, amount);
         
     }
 

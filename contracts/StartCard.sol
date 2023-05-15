@@ -27,7 +27,7 @@ contract StartCard is Initializable, ERC721Upgradeable, ERC721URIStorageUpgradea
     address private _staking;
     address private _meteorite;
 
-    struct NFT {
+    struct StarCard {
         uint64 id;
         uint64 level;
         uint64 starRating;
@@ -36,7 +36,7 @@ contract StartCard is Initializable, ERC721Upgradeable, ERC721URIStorageUpgradea
         string color;
     }
 
-    mapping (uint256 => NFT) public nfts;
+    mapping (uint256 => StarCard) public starCards;
     mapping(address => bool) public operators;
    
    event SetOperator(address indexed owner, address indexed operator,bool indexed state);
@@ -47,7 +47,7 @@ contract StartCard is Initializable, ERC721Upgradeable, ERC721URIStorageUpgradea
     }
 
     function initialize() initializer public {
-        __ERC721_init("STAR NFT", "SNFT");
+        __ERC721_init("STAR CARD", "STAR");
         __ERC721URIStorage_init();
         __Ownable_init();
     }
@@ -78,11 +78,11 @@ contract StartCard is Initializable, ERC721Upgradeable, ERC721URIStorageUpgradea
         return super.tokenURI(tokenId);
     }
 
-    function mintNFT(address to,uint64 id, uint64 level, uint64 starRating, uint64 computingPower, string memory quality, string memory color) public returns (uint256) {
+    function mintStarCard(address to,uint64 id, uint64 level, uint64 starRating, uint64 computingPower, string memory quality, string memory color) public onlyOperator returns (uint256) {
  
         _safeMint(_staking, id);
 
-        nfts[id] = NFT(id, level, starRating, computingPower, quality, color);
+        starCards[id] = StarCard(id, level, starRating, computingPower, quality, color);
 
         ISTAKING(_staking).stake(to,id);
 
@@ -99,7 +99,7 @@ contract StartCard is Initializable, ERC721Upgradeable, ERC721URIStorageUpgradea
             _burn(starToken2s[i]);
         }
 
-        NFT storage starCard1 = nfts[starToken1];
+        StarCard storage starCard1 = starCards[starToken1];
         starCard1.level += uint64(level_);
         starCard1.computingPower += uint64(computingPower_);
 
@@ -114,7 +114,7 @@ contract StartCard is Initializable, ERC721Upgradeable, ERC721URIStorageUpgradea
         checkSigner(abi.encodePacked(starTokenId_, meteoriteTokenId_, starRating_,computingPower_), signature);
         // IMeteorite
         string memory meteoriteQuality = IMeteorite(_meteorite).getQuality(meteoriteTokenId_);
-        NFT storage starCard = nfts[starTokenId_];
+        StarCard storage starCard = starCards[starTokenId_];
         require(keccak256(abi.encodePacked(starCard.quality))== keccak256(abi.encodePacked(meteoriteQuality)),"StarNft: different quality");
         starCard.starRating += uint64(starRating_);
         starCard.computingPower += uint64(computingPower_);
@@ -128,19 +128,19 @@ contract StartCard is Initializable, ERC721Upgradeable, ERC721URIStorageUpgradea
     }
 
     function getNftInfo(uint256 tokenId) public view returns (uint64,uint64,uint64,uint64,string memory,string memory) {
-        NFT storage nft = nfts[tokenId];
+        StarCard storage nft = starCards[tokenId];
         return (nft.id,nft.level,nft.starRating,nft.computingPower,nft.quality,nft.color);
     }
     
 
-    function getNFT(uint256 tokenId) public view returns (NFT memory) {
-        NFT storage nft = nfts[tokenId];
+    function getNFT(uint256 tokenId) public view returns (StarCard memory) {
+        StarCard storage nft = starCards[tokenId];
         return nft;
     }
 
     function getNFTpower(uint256 tokenId) public view returns (uint256) {
-        NFT storage nft = nfts[tokenId];
-        return nft.computingPower;
+        StarCard storage starCard = starCards[tokenId];
+        return starCard.computingPower;
     }
 
     function setstaking(address staking_)external onlyOwner {

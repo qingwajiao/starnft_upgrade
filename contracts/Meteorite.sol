@@ -42,11 +42,16 @@ contract Meteorite is Initializable, ERC721Upgradeable, OwnableUpgradeable, UUPS
         _;
     }
 
-    function mintMeteorite(address to ,uint256 tokenId, string memory quality)public {
+    function mintMeteorite(address to ,uint256 tokenId, string memory quality)public onlyOperator {
         
         _safeMint(to, tokenId);
         powers[tokenId] = quality;
         emit MintMeteorite(to,tokenId,quality);
+    }
+
+    function burn(uint256 tokenId)public onlyOperator{
+        _burn(tokenId);
+        powers[tokenId] = "";
     }
 
 
