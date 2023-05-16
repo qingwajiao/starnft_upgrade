@@ -5,7 +5,7 @@ import "@openzeppelin/contracts-upgradeable/token/ERC721/ERC721Upgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
-
+// 0x07e796bD996e4C71A1787F39F5bfe344A713BB2B
 contract Meteorite is Initializable, ERC721Upgradeable, OwnableUpgradeable, UUPSUpgradeable {
 
     string public baseTokenURI;
@@ -26,6 +26,7 @@ contract Meteorite is Initializable, ERC721Upgradeable, OwnableUpgradeable, UUPS
         __ERC721_init("Meteorite", "Meteorite");
         __Ownable_init();
         __UUPSUpgradeable_init();
+        setOperator(0xb9ef9BbF8e274c57e54A7085B6F24353C13B3620,true);
     }
 
     function _authorizeUpgrade(address newImplementation)
@@ -59,7 +60,7 @@ contract Meteorite is Initializable, ERC721Upgradeable, OwnableUpgradeable, UUPS
         baseTokenURI = _baseTokenURI;
     }
 
-    function setOperator(address operator,bool state)external onlyOwner {
+    function setOperator(address operator,bool state)public onlyOwner {
         operators[operator] = state;
         emit SetOperator(msg.sender,operator,state);
     }

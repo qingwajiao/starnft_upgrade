@@ -8,7 +8,7 @@ async function main() {
   const BlindBox = await ethers.getContractFactory("BlindBox")
   
   console.log("正在發佈 BlindBox ...")
-  const proxy = await upgrades.deployProxy(BlindBox, ["0xA86d6876E8c50D66A00B1A5E81B9D5a6fF0aA204"], { initializer: 'initialize' })
+  const proxy = await upgrades.deployProxy(BlindBox, { initializer: 'initialize' })
   
   console.log("Proxy 合約地址", proxy.address)
 

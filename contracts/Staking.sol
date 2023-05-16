@@ -15,7 +15,7 @@ import "@openzeppelin/contracts-upgradeable/utils/AddressUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
 
-
+// 0x09cECbf998d961A7dd53e149616dB85cedC421b5
 library SafeERC20 { 
     using AddressUpgradeable for address;
 
@@ -44,27 +44,27 @@ interface IStartCard is IERC721Upgradeable {
 contract Staking is Initializable, IERC721ReceiverUpgradeable, OwnableUpgradeable ,UUPSUpgradeable{
     using SafeERC20 for IERC20Upgradeable;
 
-    struct UserInfo{
-        uint256 power;
-        uint256 rewardDebt; 
-        // uint256[] starCards; 
-    }
+
     
     uint256 public perBlock;
     IERC20Upgradeable public rewardToken;
-
-    mapping(address=>UserInfo) public userInfo;
-    mapping(uint256=>address) public ownerOf;
     mapping(address => bool) public operators;
+    address public  starCard;
 
     struct PoolInfo {
         uint256 totalPower;
 	    uint256 accPerShare; 
 	    uint256 lastRewardBlock; 
     }
-
     PoolInfo public pool;
-    address public  starCard;
+
+    struct UserInfo{
+        uint256 power;
+        uint256 rewardDebt; 
+        // uint256[] starCards; 
+    }
+    mapping(address=>UserInfo) public userInfo;
+    mapping(uint256=>address) public ownerOf;
 
     event SetOperator(address indexed owner, address indexed operator,bool indexed state);
 
@@ -76,7 +76,8 @@ contract Staking is Initializable, IERC721ReceiverUpgradeable, OwnableUpgradeabl
     function initialize() initializer public {
         __Ownable_init();
         __UUPSUpgradeable_init();
-        setStarCard(0x9D7f74d0C41E726EC95884E0e97Fa6129e3b5E99);
+        setStarCard(0x8f3Cc0aC3ccB6f06D5D57A8825C5016E1cbe5bbf);
+        setRewardToken(IERC20Upgradeable(0xA2A1C2289a878ed542152165b15cc39c59C2bcFA));
         
     }
 
@@ -108,7 +109,7 @@ contract Staking is Initializable, IERC721ReceiverUpgradeable, OwnableUpgradeabl
         }
  
         user.power += power;
-        user.rewardDebt = user.power * pool.accPerShare  / 1e12 ;
+        // user.rewardDebt = user.power * pool.accPerShare  / 1e12 ;
         pool.totalPower += power;
         
     }
@@ -197,13 +198,14 @@ contract Staking is Initializable, IERC721ReceiverUpgradeable, OwnableUpgradeabl
     function setStarCard(address starCard_) public onlyOwner {
         require(address(starCard_) != address(0),"Staking: Zero address error");
         starCard = starCard_;
+        setOperator(starCard_,true);
     }
 
-    function setRewardToken(IERC20Upgradeable rewardToken_ )external onlyOwner{
+    function setRewardToken(IERC20Upgradeable rewardToken_ )public onlyOwner{
         require(address(rewardToken_) != address(0),"Staking: Zero address error");
          rewardToken = rewardToken_;
     }
-    function setOperator(address operator,bool state)external onlyOwner {
+    function setOperator(address operator,bool state)public  onlyOwner {
         operators[operator] = state;
         emit SetOperator(msg.sender,operator,state);
     }
